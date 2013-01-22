@@ -29,9 +29,9 @@ var tld_module = require('tld.node');
 загрузка из файла
 
 ```javascript
-var active_tld = 
-var reserved_tld = 
-          
+var active_tld = fs.readFileSync("base.dat");
+var reserved_tld  = fs.readFileSync("guide.dat");
+                    
 tld_module.load(active_tld, reserved_tld);
 ```
 

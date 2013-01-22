@@ -1,6 +1,10 @@
 var console = require('console'),
     vows = require('vows'),
-    assert = require('assert');
+    assert = require('assert'),
+    fs = require('fs');
+
+
+var suite = vows.describe('Testing scenarious on TLD database loaded from file(s)');
 
 
 // Test suite for main functionality of TLD module.
@@ -15,16 +19,14 @@ var console = require('console'),
 //		- when passing active defined with wildcard for top level domain (*.ar)
 //		- when passing exception for top level domain (uba.ar)
 
-var suite = vows.describe('TLD');
-
 suite.addBatch({
-    'tld': {
+    'tld-module': {
         topic: function() { 
         	var tld_module = require("../build/Release/module_tld.node"); 
-        	
-        	var active_tld = ['com','ua','com.ua','ru','*.ar','!uba.ar','рф'];
-        	var reserved_tld = ['example.com'];
-        	
+
+		var active_tld = fs.readFileSync("base.dat");
+		var reserved_tld  = fs.readFileSync("guide.dat");
+
         	tld_module.load(active_tld, reserved_tld);
         	
         	return tld_module;
@@ -143,16 +145,17 @@ suite.addBatch({
 		    'domain should be validated with status "SUCCESS"': function (result) {
 		    	assert.equal (result.status, 0);
 		    },
-		    'top level domain should be "uba.ar"': function (result) {
-		    	assert.equal (result.domain, 'uba.ar');
-		    },		    
-		    'has to have no sub domains': function (result) {
-		    	assert.equal (result.sub_domains.length, 0);
-		    }
-		}				
+			'top level domain should be "ar"': function (result) {
+				assert.equal (result.domain, 'ar');
+			},		    
+			'has to have one sub domain': function (result) {
+				assert.equal (result.sub_domains.length, 1);
+			},
+			'sub domain should be "uba"': function (result) {
+				assert.equal (result.sub_domains[0], 'uba');
+			}
+		}		
     }
 });
-
-
 
 suite.export(module);

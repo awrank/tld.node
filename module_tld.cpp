@@ -2,7 +2,7 @@
 #include <stdio.h>
 
 /////////////////////////////////////////////////////
-//	Module TLD (ALPHA)
+//	Module TLD (BETA)
 /////////////////////////////////////////////////////
 namespace module_tld
 {
@@ -12,6 +12,12 @@ namespace module_tld
 	const unsigned char ZERO		= 0x00;		//'\0'
 	const unsigned char ATCOM 		= 0x40;		//'@'
 	const unsigned char DPOINT		= 0x3A;		//':'
+	const unsigned char WILDCARD	= 0x2A;		//'*'
+	const unsigned char EXCEPTION	= 0x21;		//'!'
+	
+	const int FIND_MODE_EXACT 		= 1;
+	const int FIND_MODE_STD			= 2;
+	const int FIND_MODE_TEMPL		= 3;
 
 	const int INVALID 	= -1;
 	const int BYTE		= 8;
@@ -26,9 +32,9 @@ namespace module_tld
 	const int ILLEGAL 		= 2;	//TLD has no point
 	const int BADURI 		= 3;	//TLD has '..' (two poins)
 	const int NOTFOUND		= 4;	//TLD is unknown
-
+	
 	//
-	// node of dynamocal tree
+	// node of dynamical tree
 	//
 	typedef struct node
 	{
@@ -51,33 +57,28 @@ namespace module_tld
 	} node;
 
 	//
-	// statistic of tree
+	// tld base
 	//
-	typedef struct stat
+	typedef struct root
 	{
-		int nodes;			//tree statistic
-		int memory;
+		node* base;
+		node* reserved;
+		node* templates;
 		
-		int lines;			//input stream statistic (for create tree())
-		int domains;
-		int symbols;
-
-		struct stat* init(int n=0, int m=0, int d=0, int l=0, int s=0)
+		struct root* init(node* b=0, node* r=0, node* t=0)
 		{
-			nodes = n;
-			memory = m;
-			domains = d;
-			lines = l;
-			symbols = s;
+			base = b;
+			reserved = r;
+			templates = t;
 			return this;
 		}
 		
-		stat(int n=0, int m=0, int d=0, int l=0, int s=0)
+		root(node* b=0, node* r=0, node* t=0)
 		{
-			init(n,m,d,l,s);
+			init(b,r,t);
 		}
-	} stat;
-
+	} root;
+	
 	//
 	// Align utf-8 symbols by 4-bytes sequences
 	//
@@ -140,40 +141,55 @@ namespace module_tld
 	}
 	
 	//
-	// Add word (doamin) in the tree
+	// Add word (domain) in the tree
 	//
-	void add_word(const node* tree, const unsigned int* word, unsigned int size, stat& s)
+	void add_template(const node* tree, const unsigned int* word, unsigned int size)
 	{
-		node* p = (node*)tree;
+		node* p_node = (node*)tree;
+		while(p_node->next)
+		{
+			p_node = p_node->next;
+		}
+		p_node->next = (node*)malloc(sizeof(node));
+		p_node = p_node->next;
+		p_node->init(word[size-1]);
+		for(unsigned int index=1; index<= size; index++)
+		{
+			unsigned int symbol = index==size ? POINT : word[size-index-1];
+			
+			p_node->link = (node*)malloc(sizeof(node));
+			p_node = p_node->link;
+			p_node->init(symbol);
+		}
+	}
+	void add_word(const node* tree, const unsigned int* word, unsigned int size)
+	{
+		node* p_node = (node*)tree;
 		for(unsigned int index=0; index <= size; index++)
 		{
-			unsigned int value = index==size ? POINT : word[size-index-1];
+			unsigned int symbol = index==size ? POINT : word[size-index-1];
 			
-			if(!p->link)
+			if(!p_node->link)
 			{
-				p->link = (node*)malloc(sizeof(node));
-				p->link->init(value);
+				p_node->link = (node*)malloc(sizeof(node));
+				p_node->link->init(symbol);
 				
-				s.memory += sizeof(node);
-				s.nodes++;
-				p = p->link;
+				p_node = p_node->link;
 			}
 			else
 			{
-				p = p->link;
-				while(p->next && p->value != value)
+				p_node = p_node->link;
+				while(p_node->next && p_node->value != symbol)
 				{
-					p = p->next;
+					p_node = p_node->next;
 				}
 				
-				if(!p->next && p->value != value)
+				if(!p_node->next && p_node->value != symbol)
 				{
-					p->next = (node*)malloc(sizeof(node));
-					p->next->init(value);
+					p_node->next = (node*)malloc(sizeof(node));
+					p_node->next->init(symbol);
 					
-					s.memory += sizeof(node);
-					s.nodes++;
-					p = p->next;
+					p_node = p_node->next;
 				}
 			}
 		}
@@ -182,7 +198,7 @@ namespace module_tld
 	//
 	// Drop word (domain) if exists
 	//
-	int drop_char(node* prev_tree, const node* tree, const unsigned int* word, int index, stat& s)
+	int drop_char(node* prev_tree, const node* tree, const unsigned int* word, int index)
 	{
 		node* p_node = (node*)tree;
 		node* p_prev_node = prev_tree;
@@ -198,7 +214,7 @@ namespace module_tld
 			return 0;
 		}
 		
-		if(!p_node->link || drop_char(p_node, p_node->link, word, --index, s))
+		if(!p_node->link || drop_char(p_node, p_node->link, word, --index))
 		{
 			int result = 0;
 			if(p_prev_node)
@@ -215,8 +231,7 @@ namespace module_tld
 				{
 					p_prev_node->next = p_node->next;
 				}
-				s.nodes--;
-				s.memory-=sizeof(node);
+				
 				free(p_node);
 			}
 			return result;
@@ -224,9 +239,9 @@ namespace module_tld
 		
 		return 0;
 	}
-	int drop_word(const node* tree, const unsigned int* word, unsigned int size, stat& s)
+	int drop_word(const node* tree, const unsigned int* word, unsigned int size)
 	{
-		return drop_char(NULL, tree, word, size, s);
+		return drop_char(NULL, tree, word, size);
 	}
 
 	//
@@ -247,38 +262,6 @@ namespace module_tld
 		while(index < src_size && column<dest_size && src[index] && src[index] != EOL)
 		{
 			dest[column++] = get_symbol(src, index);
-		}
-	}
-
-	//
-	// Create tld-base from utf-8 stream (buffer)
-	//
-	void create_tree(const node* tree, unsigned int* dest, unsigned int dest_size, const unsigned char* src, unsigned int src_size, stat& s)
-	{
-		unsigned int index = 0;
-		s.init(1,sizeof(node),0,s.lines,0);	//first node contains '\0'
-		
-		while(index < src_size && src[index])
-		{
-			read_comment(src, src_size, index);
-			
-			unsigned int column = 0;
-			read_line(dest, dest_size, src, src_size, index, column);
-			
-			if(column > 0)
-			{
-				if(src[index] == EOL ||    //EOL
-				   src[index] == ZERO)     //EOF
-				{
-					dest[column] = 0;
-					add_word(tree, dest, column, s);
-					
-					s.domains++;
-					s.symbols+=column;
-				}
-			}
-			
-			index++;
 		}
 	}
 	
@@ -345,7 +328,16 @@ namespace module_tld
 	//
 	// Perform URL
 	//
-	int check_tld(const unsigned int* src, unsigned int src_size)
+	int check_node(const node* p_node, unsigned int symbol, int mode)
+	{
+		int result = (symbol == POINT);
+		if(mode == FIND_MODE_EXACT)
+		{
+			result = result && !p_node->link;
+		}
+		return result;
+	}
+	int check_domain(const unsigned int* src, unsigned int src_size)
 	{
 		int result = SUCCESS;
 		
@@ -372,49 +364,110 @@ namespace module_tld
 		}
 		return result;
 	}
-	int find_tld(const unsigned int* src, unsigned int src_size, const node* tree, int exact=0)
+	int find_word(const unsigned int* src, unsigned int src_size, const node* tree, int mode, int& exc)
 	{
 		node* p_node = (node*)tree;
-		int symbol_index = src_size;
+		exc = 0;
+		int index = src_size;
 		int tld_index = INVALID;
-		while(symbol_index >= 0 && p_node)
+		while(index >= 0 && p_node)
 		{
-			unsigned int symbol = src[symbol_index];
-			if(symbol == p_node->value)
+			unsigned int symbol = src[index];
+			
+			if(p_node->value == symbol)
 			{
-				if(symbol == POINT && (!exact || !p_node->link))
+				if(check_node(p_node, symbol, mode))
 				{
-					tld_index = symbol_index;
+					tld_index = index;
 				}
 				
-				symbol_index--;
+				index--;
 				p_node = p_node->link;
 			}
 			else
 			{
-				p_node = p_node->next;
-				while(p_node && p_node->value != symbol)
+				if(symbol != POINT)
 				{
 					p_node = p_node->next;
+					while(p_node && p_node->value != symbol)
+					{
+						p_node = p_node->next;
+					}
+				}
+				else
+				{
+					while(p_node && p_node->value!=POINT && p_node->value!=EXCEPTION)
+					{
+						p_node = p_node->next;
+					}
 				}
 				
 				if(!p_node)
 				{
 					return tld_index;
 				}
-				else
+				if(p_node->value==EXCEPTION && symbol==POINT)
 				{
-					if(symbol == POINT && (!exact || !p_node->link))
-					{
-						tld_index = symbol_index;
-					}
-					
-					symbol_index--;
-					p_node = p_node->link;
+					exc=1;
+					return tld_index;
 				}
+				
+				if(check_node(p_node, symbol, mode))
+				{
+					tld_index = index;
+				}
+				
+				index--;
+				p_node = p_node->link;
 			}
 		}
 		return tld_index;
+	}
+	int find_tld(const unsigned int* src, unsigned int src_size, const root* tree, int& exc)
+	{
+		return find_word(src, src_size, tree->base, FIND_MODE_STD, exc);
+	}
+	int find_reserved(const unsigned int* src, unsigned int src_size, const root* tree)
+	{
+		int exc = 0;
+		return find_word(src, src_size, tree->reserved, FIND_MODE_EXACT, exc);
+	}
+	int find_template(const unsigned int* src, unsigned int src_size, const root* tree)
+	{
+		int result_index = INVALID;
+		node* p_start = tree->templates->next;
+		while(p_start)
+		{			
+			if(p_start->value == src[src_size-1])
+			{
+				node* p_node = p_start->link;
+				int index = src_size - 2;
+				int tld_index = INVALID;
+				
+				while(index>=0 && p_node && (p_node->value==src[index] || (p_node->value==WILDCARD && src[index]!=POINT)))
+				{
+					if(src[index] == POINT)
+					{
+						tld_index = index;
+					}
+					
+					index--;
+					if(p_node->value != WILDCARD || src[index]==POINT)
+					{
+						p_node = p_node->link;
+					}
+				}
+				
+				//printf("%d\n", tld_index);
+				if(tld_index!=INVALID && (result_index==INVALID || tld_index<result_index))
+				{
+					result_index = tld_index;
+				}
+			}
+			
+			p_start = p_start->next;
+		}
+		return result_index;
 	}
 	int split_domains(const unsigned int* src, unsigned int src_size, unsigned int* dest, unsigned int dest_size)
 	{

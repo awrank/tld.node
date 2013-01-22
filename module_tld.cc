@@ -14,37 +14,29 @@ Handle<Value> load(const Arguments& args)
     //
     // Get data from argumments
     //
-    if(args.Length() < 2 || !(args[0]->IsArray() && args[1]->IsArray()) && !(args[0]->IsObject() && args[1]->IsObject()))
+    if(args.Length() < 2 || (!(args[0]->IsArray() && args[1]->IsArray()) && !(args[0]->IsObject() && args[1]->IsObject())))
     {
         return v8::ThrowException(Exception::Error(String::NewSymbol("Invalid argument for load(effective_tld_names, reserved_tld_names)")));
     }
 	//
 	// Check internal base (must be empty)
 	//
-	Handle<Object> base_obj = args.Holder()->GetHiddenValue(String::NewSymbol("base"))->ToObject();
-    Handle<Object> guide_obj = args.Holder()->GetHiddenValue(String::NewSymbol("guide"))->ToObject();
-	if(Buffer::Length(base_obj) > 0 || Buffer::Length(guide_obj)>0)
+	Handle<Object> root_obj = args.Holder()->GetHiddenValue(String::NewSymbol("root"))->ToObject();
+	if(Buffer::Length(root_obj) > 0)
 	{
 		return v8::ThrowException(Exception::Error(String::NewSymbol("Tld-base is already full. Use release() before load()")));
 	}
 	//
 	// Allocate memory
 	//
-	module_tld::stat* base_stat = (module_tld::stat*)malloc(sizeof(module_tld::stat));    
-	module_tld::stat* guide_stat = (module_tld::stat*)malloc(sizeof(module_tld::stat));
-	module_tld::node* base_root = (module_tld::node*)malloc(sizeof(module_tld::node));
-	module_tld::node* guide_root = (module_tld::node*)malloc(sizeof(module_tld::node));
+	module_tld::root* root = (module_tld::root*)malloc(sizeof(module_tld::root));
+	root->base = ((module_tld::node*)malloc(sizeof(module_tld::node)))->init();
+	root->reserved = ((module_tld::node*)malloc(sizeof(module_tld::node)))->init();
+	root->templates = ((module_tld::node*)malloc(sizeof(module_tld::node)))->init();
 	unsigned int word_size = 256;
 	unsigned int word[256];
 	//
-	// Initialize structures
-	//
-	base_root->init();
-	guide_root->init();
-	base_stat->init();
-	guide_stat->init();
-	//
-	// Create internal tld-base
+	// Create internal TLD-base
 	//
 	if(args[0]->IsArray() && args[1]->IsArray())
 	{
@@ -58,7 +50,19 @@ Handle<Value> load(const Arguments& args)
 			unsigned char* domain = (unsigned char*)*domain_obj;
 			unsigned int domain_size = domain_obj.length();
 			unsigned int domain_len = module_tld::utf2int(word, word_size, domain, domain_size);
-			module_tld::add_word(base_root, word, domain_len, *base_stat);
+			
+			if(word[0] == module_tld::WILDCARD)							//base contains *.xx
+			{
+				module_tld::add_template(root->templates, word, domain_len);
+			}
+			//else if(word[0] == module_tld::EXCEPTION)						//base contains !yy.xx
+			//{
+			//	module_tld::add_word(root->reserved, word+1, domain_len-1);
+			//}
+			else
+			{
+				module_tld::add_word(root->base, word, domain_len);
+			}
 		}
 		for(unsigned int i=0; i<guide_count; i++)
 		{
@@ -66,7 +70,8 @@ Handle<Value> load(const Arguments& args)
 			unsigned char* reserved = (unsigned char*)*reserved_obj;
 			unsigned int reserved_size = reserved_obj.length();
 			unsigned int reserved_len = module_tld::utf2int(word, word_size, reserved, reserved_size);
-			module_tld::add_word(guide_root, word, reserved_len, *guide_stat);
+			
+			module_tld::add_word(root->reserved, word, reserved_len);
 		}
 	}
 	else
@@ -75,23 +80,67 @@ Handle<Value> load(const Arguments& args)
 		unsigned int base_buffer_size = Buffer::Length(args[0]->ToObject());
 		unsigned char* guide_buffer = (unsigned char*)Buffer::Data(args[1]->ToObject());
 		unsigned int guide_buffer_size = Buffer::Length(args[1]->ToObject());
-		module_tld::create_tree(base_root, word, word_size, base_buffer, base_buffer_size, *base_stat);
-		module_tld::create_tree(guide_root, word, word_size, guide_buffer, guide_buffer_size, *guide_stat);	
+		//
+		// Process first argument (base can contains TLD, wildcards and exceptions)
+		//
+		unsigned int index = 0;
+		while(index < base_buffer_size && base_buffer[index])
+		{
+			module_tld::read_comment(base_buffer, base_buffer_size, index);
+			
+			unsigned int column = 0;
+			module_tld::read_line(word, word_size, base_buffer, base_buffer_size, index, column);
+			
+			if(column > 0)
+			{
+				if(base_buffer[index] == module_tld::EOL || base_buffer[index] == module_tld::ZERO)
+				{
+					word[column] = 0;
+					
+					if(word[0] == module_tld::WILDCARD)							//base contains *.xx
+					{
+						module_tld::add_template(root->templates, word, column);
+					}
+					//else if(word[0] == module_tld::EXCEPTION)						//base contains !yy.xx
+					//{
+					//	module_tld::add_word(root->reserved, word+1, column-1);
+					//}
+					else			
+					{
+						module_tld::add_word(root->base, word, column);
+					}
+				}
+			}
+			index++;
+		}
+		//
+		// Process second argument (add in guide of reserved TLD)
+		//
+		index = 0;
+		while(index < guide_buffer_size && guide_buffer[index])
+		{
+			module_tld::read_comment(guide_buffer, guide_buffer_size, index);
+			
+			unsigned int column = 0;
+			module_tld::read_line(word, word_size, guide_buffer, guide_buffer_size, index, column);
+			
+			if(column > 0)
+			{
+				if(guide_buffer[index] == module_tld::EOL || guide_buffer[index] == module_tld::ZERO)
+				{
+					word[column] = 0;
+					
+					module_tld::add_word(root->reserved, word, column);
+				}
+			}
+			index++;
+		}
 	}
     //
-    // Save base int the holder
+    // Save base int the holder, release temporary memory
     //
-	args.Holder()->SetHiddenValue(String::NewSymbol("base"), Buffer::New((char*)base_root, sizeof(module_tld::node))->handle_);
-	args.Holder()->SetHiddenValue(String::NewSymbol("guide"), Buffer::New((char*)guide_root, sizeof(module_tld::node))->handle_);
-    args.Holder()->SetHiddenValue(String::NewSymbol("stat"), Buffer::New((char*)base_stat, sizeof(module_tld::stat))->handle_);
-    args.Holder()->SetHiddenValue(String::NewSymbol("gstat"), Buffer::New((char*)guide_stat, sizeof(module_tld::stat))->handle_);
-    //
-    // Release temporary memory
-    //
-    free(base_root);
-    free(base_stat);
-    free(guide_stat);
-    free(guide_root);
+	args.Holder()->SetHiddenValue(String::NewSymbol("root"), Buffer::New((char*)root, sizeof(module_tld::root))->handle_);
+    free(root);
     
     return scope.Close(load_result); 
 }
@@ -103,25 +152,12 @@ Handle<Value> tld(const Arguments& args)
     //
     // Get internal tld-base
     //
-    Handle<Object> base_obj = args.Holder()->GetHiddenValue(String::NewSymbol("base"))->ToObject();
-    Handle<Object> guide_obj = args.Holder()->GetHiddenValue(String::NewSymbol("guide"))->ToObject();
-    Handle<Object> stat_obj = args.Holder()->GetHiddenValue(String::NewSymbol("stat"))->ToObject();
-    Handle<Object> gstat_obj = args.Holder()->GetHiddenValue(String::NewSymbol("gstat"))->ToObject();
-    if(Buffer::Length(stat_obj) != sizeof(module_tld::stat) ||
-       Buffer::Length(gstat_obj) != sizeof(module_tld::stat))
+    Handle<Object> root_obj = args.Holder()->GetHiddenValue(String::NewSymbol("root"))->ToObject();
+    if(Buffer::Length(root_obj) != sizeof(module_tld::root))
     {
         return v8::ThrowException(Exception::Error(String::NewSymbol("Invalid statistic object. Use method load() to initialize tld base")));
     }
-	//
-	// Check base size
-	//
-	if(Buffer::Length(base_obj) != (unsigned int)sizeof(module_tld::node) ||
-       Buffer::Length(guide_obj) != (unsigned int)sizeof(module_tld::node))
-    {
-        return v8::ThrowException(Exception::Error(String::NewSymbol("Invalid base. Use method load() to initialize tld base")));
-    }
-	module_tld::node* base_root = (module_tld::node*)Buffer::Data(base_obj);
-	module_tld::node* guide_root = (module_tld::node*)Buffer::Data(guide_obj);
+	module_tld::root* root = (module_tld::root*)Buffer::Data(root_obj);
     //
     // Get url from argument
     //
@@ -150,7 +186,7 @@ Handle<Value> tld(const Arguments& args)
     unsigned int dn_size = module_tld::select_dn(word, word_size, url, url_size);
     unsigned int domains_count = 0;
     int status = module_tld::SUCCESS;
-	int check = module_tld::check_tld(word, word_size);
+	int check = module_tld::check_domain(word, word_size);
 
 	if(check == module_tld::BADURI)
 	{
@@ -162,18 +198,34 @@ Handle<Value> tld(const Arguments& args)
 	}
 	else
 	{
-		int res_index = module_tld::find_tld(word, dn_size, guide_root, 1);
+		//
+		// Try search reserved TLD
+		//
+		int res_index = module_tld::find_reserved(word, dn_size, root);
         
 		if(res_index == module_tld::INVALID)
 		{
-			int tld_index = module_tld::find_tld(word, dn_size, base_root);
-           
-			if(tld_index == module_tld::INVALID)
+			//
+			// Try search TLD as word
+			//
+			int exception = 0;
+			int tld_index = module_tld::find_tld(word, dn_size, root, exception);
+			int templ_tld_index = module_tld::INVALID;
+			if(!exception)templ_tld_index =	module_tld::find_template(word, dn_size, root);
+			
+			if(tld_index == module_tld::INVALID && templ_tld_index == module_tld::INVALID)
 			{
 				status = module_tld::NOTFOUND;
 			}
 			else
 			{
+				if(tld_index == module_tld::INVALID || (templ_tld_index >= 0 && templ_tld_index < tld_index))
+				{
+					tld_index = templ_tld_index;
+				}
+				//
+				// Process URL when TLD found
+				//
 				domains_count = module_tld::split_domains(word, tld_index, domain_list, domain_list_size);
 				module_tld::int2utf(tld, tld_size, word+tld_index+1, word_size-tld_index-1);
                 domain_str = String::New((char*)tld);
@@ -209,21 +261,9 @@ Handle<Value> update(const Arguments& args)
 	//
 	// Get internal tld-base
 	//
-	Handle<Object> base_obj = args.Holder()->GetHiddenValue(String::NewSymbol("base"))->ToObject();
-    Handle<Object> guide_obj = args.Holder()->GetHiddenValue(String::NewSymbol("guide"))->ToObject();
-	Handle<Object> stat_obj = args.Holder()->GetHiddenValue(String::NewSymbol("stat"))->ToObject();
-    Handle<Object> gstat_obj = args.Holder()->GetHiddenValue(String::NewSymbol("gstat"))->ToObject();
-	module_tld::node* base_root = (module_tld::node*)Buffer::Data(base_obj);
-	module_tld::node* guide_root = (module_tld::node*)Buffer::Data(guide_obj);
-	module_tld::stat* base_stat = (module_tld::stat*)Buffer::Data(stat_obj);
-    module_tld::stat* guide_stat = (module_tld::stat*)Buffer::Data(gstat_obj);
-	if(Buffer::Length(stat_obj) != sizeof(module_tld::stat) ||
-       Buffer::Length(gstat_obj) != sizeof(module_tld::stat))
-    {
-        return v8::ThrowException(Exception::Error(String::NewSymbol("Invalid statistic object. Use method load() to initialize tld base")));
-    }
-	if(Buffer::Length(base_obj) != (unsigned int)sizeof(module_tld::node) ||
-       Buffer::Length(guide_obj) != (unsigned int)sizeof(module_tld::node))
+	Handle<Object> root_obj = args.Holder()->GetHiddenValue(String::NewSymbol("root"))->ToObject();
+	module_tld::root* root = (module_tld::root*)Buffer::Data(root_obj);
+	if(Buffer::Length(root_obj) != (unsigned int)sizeof(module_tld::root))
     {
         return v8::ThrowException(Exception::Error(String::NewSymbol("Invalid base. Use method load() to initialize tld base")));
     }
@@ -246,16 +286,13 @@ Handle<Value> update(const Arguments& args)
 	unsigned int word[256];
 	
 	module_tld::node* target = 0;
-	module_tld::stat* starget = 0;
 	if(type == 1)
 	{
-		target = base_root;
-		starget = base_stat;
+		target = root->base;
 	}
 	else if(type == 2)
 	{
-		target = guide_root;
-		starget = guide_stat;
+		target = root->reserved;
 	}
 	else
 	{
@@ -266,11 +303,11 @@ Handle<Value> update(const Arguments& args)
 	
 	if(operation == 1)
 	{
-		module_tld::add_word(target, word, word_len, *starget);
+		module_tld::add_word(target, word, word_len);
 	}
 	else if(operation == 2)
 	{
-		module_tld::drop_word(target, word, word_len, *starget);
+		module_tld::drop_word(target, word, word_len);
 	}
 	else
 	{
@@ -287,30 +324,29 @@ Handle<Value> release(const Arguments& args)
     //
     // Get base from holder
     //
-    Handle<Object> base_obj = args.Holder()->GetHiddenValue(String::NewSymbol("base"))->ToObject();
-    Handle<Object> guide_obj = args.Holder()->GetHiddenValue(String::NewSymbol("guide"))->ToObject();	
-	module_tld::node* base_root = (module_tld::node*)Buffer::Data(base_obj);
-	module_tld::node* guide_root = (module_tld::node*)Buffer::Data(guide_obj);
+    Handle<Object> root_obj = args.Holder()->GetHiddenValue(String::NewSymbol("root"))->ToObject();
+	module_tld::root* root = (module_tld::root*)Buffer::Data(root_obj);
 	//
 	// Clear tld-base
 	//
-    module_tld::clear_tree(base_root);
-    module_tld::clear_tree(guide_root);
+    module_tld::clear_tree(root->base);
+    module_tld::clear_tree(root->reserved);
+	module_tld::clear_tree(root->templates);
+	free(root->base);
+	free(root->reserved);
+	free(root->templates);
+	root->init();
 	//
 	// Remove structure from holder
 	//
-	args.Holder()->SetHiddenValue(String::NewSymbol("base"), Buffer::New(0)->handle_);
-    args.Holder()->SetHiddenValue(String::NewSymbol("guide"), Buffer::New(0)->handle_);
+	args.Holder()->SetHiddenValue(String::NewSymbol("root"), Buffer::New(0)->handle_);
 	
     return scope.Close(tld_result);
 }
 
 void init(Handle<Object> target)
 {
-    target->SetHiddenValue(String::NewSymbol("base"), Buffer::New(0)->handle_);
-    target->SetHiddenValue(String::NewSymbol("guide"), Buffer::New(0)->handle_);
-    target->SetHiddenValue(String::NewSymbol("stat"), Buffer::New(0)->handle_);
-    target->SetHiddenValue(String::NewSymbol("gstat"), Buffer::New(0)->handle_);
+    target->SetHiddenValue(String::NewSymbol("root"), Buffer::New(0)->handle_);
     
     target->Set(String::NewSymbol("load"), FunctionTemplate::New(load)->GetFunction());
     target->Set(String::NewSymbol("tld"), FunctionTemplate::New(tld)->GetFunction());

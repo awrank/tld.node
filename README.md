@@ -38,7 +38,7 @@ var reserved_tld  = fs.readFileSync("guide.dat");
 tld_module.load(active_tld, reserved_tld);
 ```
 
-загрузка данными из массива
+инициализация данными из массива
 
 ```javascript
 var active_tld = ['com','ua','com.ua','ru','*.ar','!uba.ar','рф'];
@@ -94,7 +94,7 @@ tld_module.tld("test.kk")
 
 Тестирование
 ----
-предварительное условие: [Vows](http://vowsjs.org/) фреймворк должен быть установлен
+предварительное условие, [Vows](http://vowsjs.org/) фреймворк должен быть установлен
 
 
     $ cd tests 

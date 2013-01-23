@@ -5,6 +5,9 @@ tld
 Установка
 ----
 
+Загрузить исходные файлы модуля с Github на диск.
+
+    $ npm install <путь к иcходным файлам>
 
 Использование
 ----
@@ -40,7 +43,7 @@ tld_module.load(active_tld, reserved_tld);
 ```javascript
 var active_tld = ['com','ua','com.ua','ru','*.ar','!uba.ar','рф'];
 var reserved_tld = ['example.com'];
-        	
+                            
 tld_module.load(active_tld, reserved_tld);
 ```
 
@@ -93,7 +96,7 @@ tld_module.tld("test.kk")
 ----
 предварительное условие: [Vows](http://vowsjs.org/) фреймворк должен быть установлен
 
-```bash
-cd tests 
-./test.sh
-```
+
+    $ cd tests 
+    $ ./test.sh
+

@@ -1,0 +1,21 @@
+{
+  "name": "tld.node",
+  "version": "1.0.4",
+  "authors": [
+    "Eugene Solomka",
+    "Anton Paramonov"
+  ],
+  "description": "This module provides TLD domain extraction and resolution services.",
+  "homepage": "http://github.com/awrank/tld.node",
+  "engines": {
+    "node": ">=0.8.0"
+  },
+  "repository": {
+  	"type": "git",
+		"url": "https://github.com/awrank/tld.node.git"
+	},
+  "main": "./build/Release/module_tld", 
+  "devDependencies": {
+    "vows": "*"
+  }
+}

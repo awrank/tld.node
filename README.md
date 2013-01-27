@@ -58,9 +58,9 @@ tld_module.load(active_tld, reserved_tld);
 
 - status 
   - 0 = Success
-  - 1 = Invalid      * /* TLD not acceptable (reserved, deprecated, etc.) */ *
-  - 2 = Not TLD      * /* no '.' in the URI */ *
-  - 3 = Bad URI      * /* URI includes two '.' one after another */ *
+  - 1 = Invalid      _ /* TLD not acceptable (reserved, deprecated, etc.) */ _
+  - 2 = Not TLD      _ /* no '.' in the URI */ _
+  - 3 = Bad URI      _ /* URI includes two '.' one after another */ _
   - 4 = Not found 
 - domain - выделенный домен верхнего уровня
 - sub_domains[] - выделенные суб домены, массив (если нет суб доменов должен содержать пустой массив)

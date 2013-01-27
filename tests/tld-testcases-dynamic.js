@@ -11,10 +11,10 @@ var suite = vows.describe('Testing dynamic TLD database updates');
 //
 // There is list of test scenarios:
 //      - when passing invalid domain
-//		- when passing reserved (depricated or blacklisted) domain (example.com)
+//		- when passing reserved (deprecated or blacklisted) domain (example.com)
 //		- when passing unknown top level domain (unknown.domain)
 //		- when passing active top level domain (www.google.com)
-//		- when passing active top level domain with two words zona (www.pravda.com.ua)
+//		- when passing active top level domain with two words zone (www.pravda.com.ua)
 //		- when passing active top level domain in utf-8 (магазин.рф)
 //		- when passing active defined with wildcard for top level domain (*.ar)
 //		- when passing exception for top level domain (uba.ar)
@@ -71,8 +71,7 @@ suite.addBatch({
 			},
 		    'first sub domain should be "www"': function (result) {
 		    	assert.equal (result.sub_domains[0], 'www');
-		    }					
-		
+		    }
 		}, 
 						
 		'when dynamicaly removing top level domain (com.ua)': {
@@ -92,7 +91,25 @@ suite.addBatch({
 				assert.equal (result.status, 1);
 			}
 		},
-		
+
+        'when dynamicaly removing top level domain (net.ua)': {
+            topic: function(tld_module) {
+                return tld_module.update('net.ua', 1 /* for tld-base */, 2 /* to remove domain */);
+            },
+            'empty object has to be returned': function (result) {
+                assert.ok(result);
+            }
+        },
+
+        'when passing removed top level domain with two words zona (www.deshevle.net.ua)': {
+            topic: function(tld_module) {
+                return tld_module.tld('www.deshevle.net.ua');
+            },
+            'domain should be rejected with status "RESERVED"': function (result) {
+                assert.equal (result.status, 1);
+            }
+        },
+
 		'when dynamicaly removing top level domain (ua)': {
 		    topic: function(tld_module) {
 				return tld_module.update('ua', 1 /* for tld-base */, 2 /* to remove domain */);
@@ -105,15 +122,6 @@ suite.addBatch({
 		'when passing removed top level domain (rozetka.ua)': {
 		    topic: function(tld_module) {
 				return tld_module.tld('rozetka.ua');
-		    },
-			'domain should be rejected with status "RESERVED"': function (result) {
-				assert.equal (result.status, 1);
-			}
-		}, 		
-		
-		'when passing removed top level domain (deshevle.net.ua)': {
-		    topic: function(tld_module) {
-				return tld_module.tld('deshevle.net.ua');
 		    },
 			'domain should be rejected with status "RESERVED"': function (result) {
 				assert.equal (result.status, 1);
@@ -136,7 +144,7 @@ suite.addBatch({
 			'domain should be rejected with status "RESERVED"': function (result) {
 				assert.equal (result.status, 1);
 			}
-		},		
+		}
     }
 });
 

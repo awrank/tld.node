@@ -19,7 +19,7 @@ var tld_module = require('tld.node');
 ```
 
 
-### void load(active, reserved)
+### function load(active, reserved)
 
 Загрузка баз TLD и инициализация модуля
 

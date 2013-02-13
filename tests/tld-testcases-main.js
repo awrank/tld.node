@@ -4,21 +4,22 @@ var console = require('console'),
     fs = require('fs');
 
 
-var suite = vows.describe('Testing main scenarious');
+var suite = vows.describe('Testing main scenario');
 
-
-// Test suite for main functionality of TLD module.
-//
-// There is list of test scenarios:
-//      - when passing invalid domain
-//		- when passing reserved (deprecated or blacklisted) domain (example.com)
-//		- when passing unknown top level domain (unknown.domain)
-//		- when passing active top level domain (www.google.com)
-//		- when passing active top level domain with two words zone (www.pravda.com.ua)
-//		- when passing active top level domain in utf-8 (магазин.рф)
-//		- when passing active defined with wildcard for top level domain (*.ar)
-//		- when passing exception for top level domain (uba.ar)
-
+/**
+ * Test suite for main functionality of TLD module.
+ *
+ * There is list of test scenarios (8):
+ *
+ * - when passing invalid domain
+ * - when passing reserved (deprecated or blacklisted) domain (example.com)
+ * - when passing unknown top level domain (unknown.domain)
+ * - when passing active top level domain (www.google.com)
+ * - when passing active top level domain with two words zone (www.pravda.com.ua)
+ * - when passing active top level domain in utf-8 (магазин.рф)
+ * - when passing active defined with wildcard for top level domain (*.ar)
+ * - when passing exception for top level domain (uba.ar)
+ */
 suite.addBatch({
     'tld-module': {
         topic: function() { 
@@ -41,7 +42,7 @@ suite.addBatch({
             }
         },
         
-		'when passing reserved (depricated or blacklisted) domain (example.com)': {
+		'when passing reserved (deprecated or blacklisted) domain (example.com)': {
 		    topic: function(tld_module) {
 				return tld_module.tld('example.com');
 		    },
@@ -80,7 +81,7 @@ suite.addBatch({
 		    }
 		},
 		
-		'when passing active top level domain with two words zona (www.pravda.com.ua)': {
+		'when passing active top level domain with two words zone (www.pravda.com.ua)': {
 		    topic: function(tld_module) {
 				return tld_module.tld('www.pravda.com.ua');
 		    },
@@ -100,8 +101,7 @@ suite.addBatch({
 		    	assert.equal (result.sub_domains[0], 'www');
 		    }
 		},
-		
-		
+
 		'when passing active top level domain in utf-8 (магазин.рф)': {
 		    topic: function(tld_module) {
 				return tld_module.tld('магазин.рф');

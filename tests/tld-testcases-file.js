@@ -4,28 +4,29 @@ var console = require('console'),
     fs = require('fs');
 
 
-var suite = vows.describe('Testing scenarious on TLD database loaded from file(s)');
+var suite = vows.describe('Testing scenario on TLD database loaded from file(s)');
 
-
-// Test suite for main functionality of TLD module.
-//
-// There is list of test scenarios:
-//      - when passing invalid domain
-//		- when passing reserved (deprecated or blacklisted) domain (example.com)
-//		- when passing unknown top level domain (unknown.domain)
-//		- when passing active top level domain (www.google.com)
-//		- when passing active top level domain with two words zone (www.pravda.com.ua)
-//		- when passing active top level domain in utf-8 (магазин.рф)
-//		- when passing active defined with wildcard for top level domain (*.ar)
-//		- when passing exception for top level domain (uba.ar)
-
+/**
+ * Test suite for main functionality of TLD module.
+ *
+ * There is list of test scenarios (8):
+ *
+ * - when passing invalid domain
+ * - when passing reserved (deprecated or blacklisted) domain (example.com)
+ * - when passing unknown top level domain (unknown.domain)
+ * - when passing active top level domain (www.google.com)
+ * - when passing active top level domain with two words zone (www.pravda.com.ua)
+ * - when passing active top level domain in utf-8 (магазин.рф)
+ * - when passing active defined with wildcard for top level domain (*.ar)
+ * - when passing exception for top level domain (uba.ar)
+ */
 suite.addBatch({
     'tld-module': {
         topic: function() { 
         	var tld_module = require("../build/Release/module_tld.node"); 
 
-		var active_tld = fs.readFileSync("base.dat");
-		var reserved_tld  = fs.readFileSync("guide.dat");
+		    var active_tld = fs.readFileSync("base.dat");
+		    var reserved_tld  = fs.readFileSync("guide.dat");
 
         	tld_module.load(active_tld, reserved_tld);
         	

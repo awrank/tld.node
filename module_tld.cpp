@@ -203,7 +203,7 @@ namespace module_tld
 		node* p_node = (node*)tree;
 		node* p_prev_node = prev_tree;
 		unsigned int value = index<0 ? POINT : word[index];
-		
+
 		while(p_node && p_node->value != value)
 		{
 			p_prev_node = p_node;
@@ -213,11 +213,11 @@ namespace module_tld
 		{
 			return 0;
 		}
-		
+
 		if(!p_node->link || drop_char(p_node, p_node->link, word, --index))
 		{
 			int result = 0;
-			if(p_prev_node)
+			if(p_prev_node && !(index>0 && value==POINT))
 			{
 				if(p_prev_node == prev_tree)
 				{
@@ -231,12 +231,12 @@ namespace module_tld
 				{
 					p_prev_node->next = p_node->next;
 				}
-				
+
 				free(p_node);
 			}
 			return result;
 		}
-		
+
 		return 0;
 	}
 	int drop_word(const node* tree, const unsigned int* word, unsigned int size)

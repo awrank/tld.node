@@ -7,25 +7,29 @@ var console = require('console'),
 var suite = vows.describe('Testing dynamic TLD database updates');
 
 
-// Test suite for main functionality of TLD module.
-//
-// There is list of test scenarios:
-//      - when passing invalid domain
-//		- when passing reserved (deprecated or blacklisted) domain (example.com)
-//		- when passing unknown top level domain (unknown.domain)
-//		- when passing active top level domain (www.google.com)
-//		- when passing active top level domain with two words zone (www.pravda.com.ua)
-//		- when passing active top level domain in utf-8 (магазин.рф)
-//		- when passing active defined with wildcard for top level domain (*.ar)
-//		- when passing exception for top level domain (uba.ar)
-
+/**
+ * Test suite for main functionality of TLD module.
+ *
+ * There is list of test scenarios (13):
+ *
+ * - when passing unknown top level domain (scarlet.nl)
+ * - when dynamically adding top level domain (nl)
+ * - when passing active dynamically added top level domain (www.scarlet.nl)
+ * - when dynamically removing top level domain (com.ua)
+ * - when passing removed top level domain with two words zone (www.pravda.com.ua), still should be resolved by top level zone (ua)
+ * - when dynamically removing top level domain (net.ua)
+ * - when passing removed top level domain with two words zone (www.deshevle.net.ua), still should be resolved by top level zone (ua)
+ * - when dynamically removing top level domain (ua)
+ * - when passing removed top level domain (rozetka.ua)
+ * - when passing removed top level domain with two words zone (www.pravda.com.ua) after top level zone (ua) removed
+ * - when passing removed top level domain with two words zone (www.deshevle.net.ua) after top level zone (ua) removed
+ * - when dynamically adding domain to list of reserved domains (example.net)
+ * - when passing dynamically reserved domain (example.net)
+ */
 suite.addBatch({
     'tld-module': {
         topic: function() { 
         	var tld_module = require("../build/Release/module_tld.node"); 
-
-			//var active_tld = fs.readFileSync("base.dat");
-			//var reserved_tld  = fs.readFileSync("guide.dat");
 
         	var active_tld = ['com','net','ua','com.ua','net.ua','ru','*.ar','!uba.ar','рф'];
         	var reserved_tld = ['example.com'];
@@ -44,16 +48,16 @@ suite.addBatch({
 		    }
 		},
 		
-		'when dynamicaly adding top level domain (nl)': {
+		'when dynamically adding top level domain (nl)': {
 		    topic: function(tld_module) {
-				return tld_module.update('nl', 1 /* for tld-base */, 1 /* to add domain */);
+				return tld_module.update('nl', 1 /* to add domain */, 1 /* to tld-base */);
 		    },
 		    'empty object has to be returned': function (result) {
 		    	assert.ok(result);
 		    }
 		},
 		
-		'when passing active dynamicaly added top level domain (www.scarlet.nl)': {
+		'when passing active dynamically added top level domain (www.scarlet.nl)': {
 		    topic: function(tld_module) {
 				return tld_module.tld('www.scarlet.nl');
 		    },
@@ -74,45 +78,57 @@ suite.addBatch({
 		    }
 		}, 
 						
-		'when dynamicaly removing top level domain (com.ua)': {
+		'when dynamically removing top level domain (com.ua)': {
 		    topic: function(tld_module) {
-				return tld_module.update('com.ua', 1 /* for tld-base */, 2 /* to remove domain */);
+				return tld_module.update('com.ua', 2 /* to remove domain */, 1 /* from tld-base */);
 		    },
 			'empty object has to be returned': function (result) {
 				assert.ok(result);
 			}
 		},
 		
-		'when passing removed top level domain with two words zona (www.pravda.com.ua)': {
+		'when passing removed top level domain with two words zone (www.pravda.com.ua), still should be resolved by top level zone (ua)': {
 		    topic: function(tld_module) {
 				return tld_module.tld('www.pravda.com.ua');
 		    },
-			'domain should be rejected with status "RESERVED"': function (result) {
-				assert.equal (result.status, 1);
-			}
+            'domain should be validated with status "SUCCESS"': function (result) {
+                assert.equal (result.status, 0);
+            },
+            'top level domain should be "ua"': function (result) {
+                assert.equal (result.domain, 'ua');
+            },
+            'has to have three domains': function (result) {
+                assert.equal (result.sub_domains.length, 3);
+            }
 		},
 
-        'when dynamicaly removing top level domain (net.ua)': {
+        'when dynamically removing top level domain (net.ua)': {
             topic: function(tld_module) {
-                return tld_module.update('net.ua', 1 /* for tld-base */, 2 /* to remove domain */);
+                return tld_module.update('net.ua', 2 /* to remove domain */, 1 /* from tld-base */);
             },
             'empty object has to be returned': function (result) {
                 assert.ok(result);
             }
         },
 
-        'when passing removed top level domain with two words zona (www.deshevle.net.ua)': {
+        'when passing removed top level domain with two words zone (www.deshevle.net.ua), still should be resolved by top level zone (ua)': {
             topic: function(tld_module) {
                 return tld_module.tld('www.deshevle.net.ua');
             },
-            'domain should be rejected with status "RESERVED"': function (result) {
-                assert.equal (result.status, 1);
+            'domain should be validated with status "SUCCESS"': function (result) {
+                assert.equal (result.status, 0);
+            },
+            'top level domain should be "ua"': function (result) {
+                assert.equal (result.domain, 'ua');
+            },
+            'has to have three domains': function (result) {
+                assert.equal (result.sub_domains.length, 3);
             }
         },
 
-		'when dynamicaly removing top level domain (ua)': {
+		'when dynamically removing top level domain (ua)': {
 		    topic: function(tld_module) {
-				return tld_module.update('ua', 1 /* for tld-base */, 2 /* to remove domain */);
+				return tld_module.update('ua', 2 /* to remove domain */, 1 /* from tld-base */);
 		    },
 			'empty object has to be returned': function (result) {
 				assert.ok(result);
@@ -123,21 +139,39 @@ suite.addBatch({
 		    topic: function(tld_module) {
 				return tld_module.tld('rozetka.ua');
 		    },
-			'domain should be rejected with status "RESERVED"': function (result) {
-				assert.equal (result.status, 1);
+			'domain should be rejected with status "NOT FOUND"': function (result) {
+				assert.equal (result.status, 4);
 			}
 		},
+
+        'when passing removed top level domain with two words zone (www.pravda.com.ua) after top level zone (ua) removed': {
+            topic: function(tld_module) {
+                return tld_module.tld('www.pravda.com.ua');
+            },
+            'domain should be rejected with status "NOT FOUND"': function (result) {
+                assert.equal (result.status, 4);
+            }
+        },
+
+        'when passing removed top level domain with two words zone (www.deshevle.net.ua) after top level zone (ua) removed': {
+            topic: function(tld_module) {
+                return tld_module.tld('www.deshevle.net.ua');
+            },
+            'domain should be rejected with status "NOT FOUND"': function (result) {
+                assert.equal (result.status, 4);
+            }
+        },
 		
-		'when dynamicaly adding domain to list of reserved domains (example.net)': {
+		'when dynamically adding domain to list of reserved domains (example.net)': {
 		    topic: function(tld_module) {
-				return tld_module.update('example.net', 2 /* for reserved-base */, 1 /* to add domain */);
+				return tld_module.update('example.net', 1 /* to add domain */, 2 /* from reserved-base */);
 		    },
 			'empty object has to be returned': function (result) {
 				assert.ok(result);
 			}
 		},
 		
-		'when passing dynamicaly reserved domain (example.net)': {
+		'when passing dynamically reserved domain (example.net)': {
 		    topic: function(tld_module) {
 				return tld_module.tld('example.net');
 		    },
